@@ -1,20 +1,24 @@
-# ProjetoAllegro
-
 
 # 🎨 Projeto: Editor de Formas Gráficas com Allegro 5
 
 ## ✅ Descrição
 
-Este projeto permite criar, selecionar, mover e redimensionar formas geométricas básicas (quadrado, retângulo, círculo e triângulo) através de uma interface gráfica utilizando a biblioteca **Allegro 5** em linguagem C.
+Este projeto permite criar, selecionar, mover, redimensionar, deletar e alterar a cor de formas geométricas básicas (quadrado, retângulo, círculo e triângulo) através de uma interface gráfica utilizando a biblioteca **Allegro 5** em C.
+
+Inclui também captura de tela e exibição de timer em tempo real.
 
 ---
 
 ## 🚀 **Funcionalidades principais:**
 
-- Criar formas através de menu gráfico.
-- Selecionar formas com clique do mouse.
-- Mover formas com setas ou arrastando com o mouse.
-- Redimensionar formas em tempo real com `+` e `-`.
+✅ Criar formas através de menu gráfico  
+✅ Selecionar formas com clique do mouse  
+✅ Mover formas com setas ou arrastando com o mouse  
+✅ Redimensionar formas em tempo real com `+` e `-`  
+✅ Mudar cor da forma selecionada com tecla `C`  
+✅ Deletar forma selecionada com tecla `Delete`  
+✅ Capturar a tela com `Ctrl + S` → salva como imagem PNG  
+✅ Exibição de **timer** (tempo de execução) no canto superior direito  
 
 ---
 
@@ -106,7 +110,11 @@ No mesmo terminal:
 | Selecionar forma | Clique sobre ela |
 | Mover forma | Setas ou arrastando com mouse |
 | Redimensionar | `+` ou `-` |
+| Mudar cor da forma | `C` |
+| Deletar forma | `Delete` |
+| Capturar tela | `Ctrl + S` |
 | Criar forma | No menu, escolha com `↑` `↓` e confirme com `ENTER` |
+| Ver tempo de execução | Exibido no canto superior direito |
 
 ---
 
@@ -116,7 +124,9 @@ No mesmo terminal:
 2. Clique sobre a forma para selecioná-la.  
 3. Mova com as setas ou arrastando.  
 4. Redimensione com `+` ou `-`.  
-5. Crie mais formas ou redimensione todas como quiser!
+5. Altere a cor com `C`.  
+6. Deletar se quiser com `Delete`.  
+7. Capture a tela com `Ctrl + S`.  
 
 ---
 

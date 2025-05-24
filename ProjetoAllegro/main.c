@@ -2,62 +2,70 @@
 #include <allegro5/allegro_font.h>
 #include <allegro5/allegro_ttf.h>
 #include <allegro5/allegro_primitives.h>
+#include <allegro5/allegro_image.h>
 #include <stdio.h>
 
-#define SCREEN_WIDTH 800
-#define SCREEN_HEIGHT 600
-#define FPS 60
-#define MAX_SHAPES 100
-#define MOVE_STEP 5
-#define RESIZE_STEP 2
+#define ScreenWidth 800
+#define ScreenHeight 600
+#define Fps 60
+#define MaxShapes 100
+#define MoveStep 5
+#define ResizeStep 2
 
-typedef enum { STATE_RUNNING, STATE_MENU } AppState;
-typedef enum { SHAPE_SQUARE, SHAPE_CIRCLE, SHAPE_RECTANGLE, SHAPE_TRIANGLE } ShapeType;
+typedef enum { StateRunning, StateMenu } AppState;
+typedef enum { ShapeSquare, ShapeCircle, ShapeRectangle, ShapeTriangle } ShapeType;
 
 typedef struct {
-    ShapeType type;
-    float x, y;
-    float w, h, r;
-    ALLEGRO_COLOR color;
+    ShapeType Type;
+    float X, Y;
+    float W, H, R;
+    ALLEGRO_COLOR Color;
 } Shape;
 
-Shape shapes[MAX_SHAPES];
-int shape_count = 0;
+Shape shapes[MaxShapes];
+int shapeCount = 0;
 
-AppState state = STATE_RUNNING;
-int menu_selection = 0;
-int selected_shape = -1;
+AppState state = StateRunning;
+int menuSelection = 0;
+int selectedShape = -1;
 bool dragging = false;
 
-bool move_up = false, move_down = false, move_left = false, move_right = false;
-bool resize_increase = false, resize_decrease = false;
+bool moveUp = false, moveDown = false, moveLeft = false, moveRight = false;
+bool resizeIncrease = false, resizeDecrease = false;
 
-bool initialize_allegro();
-ALLEGRO_FONT* load_font(const char* path, int size);
-void render_scene(ALLEGRO_FONT* font);
-void draw_shape(const Shape* s, bool selected);
-void draw_menu(ALLEGRO_FONT* font);
-void add_shape(ShapeType type);
-bool is_mouse_over(const Shape* s, float mx, float my);
+int screenshotCount = 0;
+
+float elapsedTime = 0.0f;
+
+bool InitializeAllegro();
+ALLEGRO_FONT* LoadFont(const char* path, int size);
+void RenderScene(ALLEGRO_FONT* font);
+void DrawShape(const Shape* shape, bool selected);
+void DrawMenu(ALLEGRO_FONT* font);
+void AddShape(ShapeType type);
+bool IsMouseOver(const Shape* shape, float mx, float my);
+void SaveScreenshot();
 
 int main() {
-    if (!initialize_allegro()) return -1;
+    if (!InitializeAllegro()) return -1;
 
-    ALLEGRO_DISPLAY* display = al_create_display(SCREEN_WIDTH, SCREEN_HEIGHT);
+    ALLEGRO_DISPLAY* display = al_create_display(ScreenWidth, ScreenHeight);
     al_set_window_title(display, "Selecionar e Redimensionar Formas - Allegro");
-    ALLEGRO_FONT* font = load_font("arial.ttf", 24);
+    ALLEGRO_FONT* font = LoadFont("arial.ttf", 16);
     ALLEGRO_EVENT_QUEUE* queue = al_create_event_queue();
-    ALLEGRO_TIMER* timer = al_create_timer(1.0 / FPS);
+    ALLEGRO_TIMER* timer = al_create_timer(1.0 / Fps);
 
     al_register_event_source(queue, al_get_display_event_source(display));
     al_register_event_source(queue, al_get_keyboard_event_source());
     al_register_event_source(queue, al_get_mouse_event_source());
     al_register_event_source(queue, al_get_timer_event_source(timer));
 
+    al_init_image_addon();
+
     al_start_timer(timer);
 
     bool redraw = true, running = true;
-    float drag_offset_x = 0, drag_offset_y = 0;
+    float dragOffsetX = 0, dragOffsetY = 0;
 
     while (running) {
         ALLEGRO_EVENT ev;
@@ -66,55 +74,73 @@ int main() {
         if (ev.type == ALLEGRO_EVENT_DISPLAY_CLOSE) running = false;
 
         if (ev.type == ALLEGRO_EVENT_KEY_DOWN) {
-            if (state == STATE_RUNNING) {
+            if (state == StateRunning) {
                 if (ev.keyboard.keycode == ALLEGRO_KEY_M) {
-                    state = STATE_MENU;
-                } else if (selected_shape != -1) {
-                    if (ev.keyboard.keycode == ALLEGRO_KEY_UP) move_up = true;
-                    if (ev.keyboard.keycode == ALLEGRO_KEY_DOWN) move_down = true;
-                    if (ev.keyboard.keycode == ALLEGRO_KEY_LEFT) move_left = true;
-                    if (ev.keyboard.keycode == ALLEGRO_KEY_RIGHT) move_right = true;
-                    if (ev.keyboard.keycode == ALLEGRO_KEY_EQUALS || ev.keyboard.keycode == ALLEGRO_KEY_PAD_PLUS) resize_increase = true;
-                    if (ev.keyboard.keycode == ALLEGRO_KEY_MINUS || ev.keyboard.keycode == ALLEGRO_KEY_PAD_MINUS) resize_decrease = true;
+                    state = StateMenu;
+                } else if (selectedShape != -1) {
+                    if (ev.keyboard.keycode == ALLEGRO_KEY_UP) moveUp = true;
+                    if (ev.keyboard.keycode == ALLEGRO_KEY_DOWN) moveDown = true;
+                    if (ev.keyboard.keycode == ALLEGRO_KEY_LEFT) moveLeft = true;
+                    if (ev.keyboard.keycode == ALLEGRO_KEY_RIGHT) moveRight = true;
+                    if (ev.keyboard.keycode == ALLEGRO_KEY_EQUALS || ev.keyboard.keycode == ALLEGRO_KEY_PAD_PLUS) resizeIncrease = true;
+                    if (ev.keyboard.keycode == ALLEGRO_KEY_MINUS || ev.keyboard.keycode == ALLEGRO_KEY_PAD_MINUS) resizeDecrease = true;
+                    if (ev.keyboard.keycode == ALLEGRO_KEY_C) shapes[selectedShape].Color = al_map_rgb(rand() % 256, rand() % 256, rand() % 256);
+                    if (ev.keyboard.keycode == ALLEGRO_KEY_DELETE) {
+                        for (int i = selectedShape; i < shapeCount - 1; i++) {
+                            shapes[i] = shapes[i + 1];
+                        }
+                        shapeCount--;
+
+                        if (shapeCount == 0) {
+                            selectedShape = -1;
+                        } else {
+                            selectedShape = selectedShape % shapeCount;
+                        }
+                    }
                 }
-            } else if (state == STATE_MENU) {
+
+                if (ev.keyboard.keycode == ALLEGRO_KEY_S && (ev.keyboard.modifiers & ALLEGRO_KEYMOD_CTRL)) {
+                    SaveScreenshot();
+                }
+
+            } else if (state == StateMenu) {
                 if (ev.keyboard.keycode == ALLEGRO_KEY_DOWN) {
-                    menu_selection = (menu_selection + 1) % 4;
+                    menuSelection = (menuSelection + 1) % 4;
                 } else if (ev.keyboard.keycode == ALLEGRO_KEY_UP) {
-                    menu_selection = (menu_selection - 1 + 4) % 4;
+                    menuSelection = (menuSelection - 1 + 4) % 4;
                 } else if (ev.keyboard.keycode == ALLEGRO_KEY_ENTER) {
-                    add_shape((ShapeType)menu_selection);
-                    state = STATE_RUNNING;
+                    AddShape((ShapeType)menuSelection);
+                    state = StateRunning;
                 } else if (ev.keyboard.keycode == ALLEGRO_KEY_ESCAPE) {
-                    state = STATE_RUNNING;
+                    state = StateRunning;
                 }
             }
         }
 
         if (ev.type == ALLEGRO_EVENT_KEY_UP) {
-            if (selected_shape != -1) {
-                if (ev.keyboard.keycode == ALLEGRO_KEY_UP) move_up = false;
-                if (ev.keyboard.keycode == ALLEGRO_KEY_DOWN) move_down = false;
-                if (ev.keyboard.keycode == ALLEGRO_KEY_LEFT) move_left = false;
-                if (ev.keyboard.keycode == ALLEGRO_KEY_RIGHT) move_right = false;
-                if (ev.keyboard.keycode == ALLEGRO_KEY_EQUALS || ev.keyboard.keycode == ALLEGRO_KEY_PAD_PLUS) resize_increase = false;
-                if (ev.keyboard.keycode == ALLEGRO_KEY_MINUS || ev.keyboard.keycode == ALLEGRO_KEY_PAD_MINUS) resize_decrease = false;
+            if (selectedShape != -1) {
+                if (ev.keyboard.keycode == ALLEGRO_KEY_UP) moveUp = false;
+                if (ev.keyboard.keycode == ALLEGRO_KEY_DOWN) moveDown = false;
+                if (ev.keyboard.keycode == ALLEGRO_KEY_LEFT) moveLeft = false;
+                if (ev.keyboard.keycode == ALLEGRO_KEY_RIGHT) moveRight = false;
+                if (ev.keyboard.keycode == ALLEGRO_KEY_EQUALS || ev.keyboard.keycode == ALLEGRO_KEY_PAD_PLUS) resizeIncrease = false;
+                if (ev.keyboard.keycode == ALLEGRO_KEY_MINUS || ev.keyboard.keycode == ALLEGRO_KEY_PAD_MINUS) resizeDecrease = false;
             }
         }
 
         if (ev.type == ALLEGRO_EVENT_MOUSE_BUTTON_DOWN) {
-            if (state == STATE_RUNNING) {
+            if (state == StateRunning) {
                 float mx = ev.mouse.x;
                 float my = ev.mouse.y;
 
-                selected_shape = -1;
+                selectedShape = -1;
 
-                for (int i = shape_count - 1; i >= 0; i--) {
-                    if (is_mouse_over(&shapes[i], mx, my)) {
-                        selected_shape = i;
+                for (int i = shapeCount - 1; i >= 0; i--) {
+                    if (IsMouseOver(&shapes[i], mx, my)) {
+                        selectedShape = i;
                         dragging = true;
-                        drag_offset_x = mx - shapes[i].x;
-                        drag_offset_y = my - shapes[i].y;
+                        dragOffsetX = mx - shapes[i].X;
+                        dragOffsetY = my - shapes[i].Y;
                         break;
                     }
                 }
@@ -125,31 +151,33 @@ int main() {
             dragging = false;
         }
 
-        if (ev.type == ALLEGRO_EVENT_MOUSE_AXES && dragging && selected_shape != -1) {
-            shapes[selected_shape].x = ev.mouse.x - drag_offset_x;
-            shapes[selected_shape].y = ev.mouse.y - drag_offset_y;
+        if (ev.type == ALLEGRO_EVENT_MOUSE_AXES && dragging && selectedShape != -1) {
+            shapes[selectedShape].X = ev.mouse.x - dragOffsetX;
+            shapes[selectedShape].Y = ev.mouse.y - dragOffsetY;
         }
 
         if (ev.type == ALLEGRO_EVENT_TIMER) {
-            if (selected_shape != -1) {
-                Shape* s = &shapes[selected_shape];
-                if (move_up) s->y -= MOVE_STEP;
-                if (move_down) s->y += MOVE_STEP;
-                if (move_left) s->x -= MOVE_STEP;
-                if (move_right) s->x += MOVE_STEP;
+            elapsedTime += 1.0f / Fps;
 
-                if (resize_increase) {
-                    if (s->type == SHAPE_CIRCLE) s->r += RESIZE_STEP;
+            if (selectedShape != -1) {
+                Shape* s = &shapes[selectedShape];
+                if (moveUp) s->Y -= MoveStep;
+                if (moveDown) s->Y += MoveStep;
+                if (moveLeft) s->X -= MoveStep;
+                if (moveRight) s->X += MoveStep;
+
+                if (resizeIncrease) {
+                    if (s->Type == ShapeCircle) s->R += ResizeStep;
                     else {
-                        s->w += RESIZE_STEP;
-                        if (s->type != SHAPE_SQUARE) s->h += RESIZE_STEP;
+                        s->W += ResizeStep;
+                        if (s->Type != ShapeSquare) s->H += ResizeStep;
                     }
                 }
-                if (resize_decrease) {
-                    if (s->type == SHAPE_CIRCLE && s->r > RESIZE_STEP) s->r -= RESIZE_STEP;
+                if (resizeDecrease) {
+                    if (s->Type == ShapeCircle && s->R > ResizeStep) s->R -= ResizeStep;
                     else {
-                        if (s->w > RESIZE_STEP) s->w -= RESIZE_STEP;
-                        if (s->type != SHAPE_SQUARE && s->h > RESIZE_STEP) s->h -= RESIZE_STEP;
+                        if (s->W > ResizeStep) s->W -= ResizeStep;
+                        if (s->Type != ShapeSquare && s->H > ResizeStep) s->H -= ResizeStep;
                     }
                 }
             }
@@ -159,10 +187,10 @@ int main() {
         if (redraw) {
             al_clear_to_color(al_map_rgb(0, 0, 0));
 
-            if (state == STATE_RUNNING) {
-                render_scene(font);
-            } else if (state == STATE_MENU) {
-                draw_menu(font);
+            if (state == StateRunning) {
+                RenderScene(font);
+            } else if (state == StateMenu) {
+                DrawMenu(font);
             }
 
             al_flip_display();
@@ -177,80 +205,126 @@ int main() {
     return 0;
 }
 
-bool initialize_allegro() {
+bool InitializeAllegro() {
     if (!al_init()) return false;
     if (!al_install_keyboard()) return false;
     if (!al_install_mouse()) return false;
     if (!al_init_primitives_addon()) return false;
+    if (!al_init_image_addon()) return false;
     al_init_font_addon();
     al_init_ttf_addon();
     return true;
 }
 
-ALLEGRO_FONT* load_font(const char* path, int size) {
+ALLEGRO_FONT* LoadFont(const char* path, int size) {
     return al_load_font(path, size, 0);
 }
 
-void render_scene(ALLEGRO_FONT* font) {
-    for (int i = 0; i < shape_count; i++) {
-        draw_shape(&shapes[i], i == selected_shape);
+void RenderScene(ALLEGRO_FONT* font) {
+    for (int i = 0; i < shapeCount; i++) {
+        DrawShape(&shapes[i], i == selectedShape);
     }
-    al_draw_text(font, al_map_rgb(255, 255, 255), 10, 10, 0, "M - Menu | Clique - Selecionar | Setas/Mouse - Mover");
-    al_draw_text(font, al_map_rgb(255, 255, 255), 10, 30, 0, "+ / - → Redimensionar");
+
+    al_draw_text(font, al_map_rgb(255, 255, 255), 10, 10, 0, "M → Menu");
+    al_draw_text(font, al_map_rgb(255, 255, 255), 10, 30, 0, "Clique → Selecionar");
+    al_draw_text(font, al_map_rgb(255, 255, 255), 10, 50, 0, "Setas/Mouse → Mover");
+    al_draw_text(font, al_map_rgb(255, 255, 255), 10, 70, 0, "+ / - → Redimensionar");
+    al_draw_text(font, al_map_rgb(255, 255, 255), 10, 90, 0, "Ctrl+S → Screenshot");
+    al_draw_text(font, al_map_rgb(255, 255, 255), 10, 110, 0, "Delete → Deletar forma");
+    al_draw_text(font, al_map_rgb(255, 255, 255), 10, 130, 0, "C → Mudar a cor");
+
+    char timerText[32];
+    sprintf(timerText, "Timer: %.1f s", elapsedTime);
+
+    al_draw_text(font, al_map_rgb(255, 255, 255), ScreenWidth - 120, 10, 0, timerText);
 }
 
-void draw_shape(const Shape* s, bool selected) {
+void DrawShape(const Shape* shape, bool selected) {
     ALLEGRO_COLOR border = selected ? al_map_rgb(255, 255, 0) : al_map_rgb(0, 0, 0);
 
-    switch (s->type) {
-        case SHAPE_SQUARE:
-            al_draw_filled_rectangle(s->x, s->y, s->x + s->w, s->y + s->w, s->color);
-            al_draw_rectangle(s->x, s->y, s->x + s->w, s->y + s->w, border, 2);
+    switch (shape->Type) {
+        case ShapeSquare:
+            al_draw_filled_rectangle(shape->X, shape->Y, shape->X + shape->W, shape->Y + shape->W, shape->Color);
+            al_draw_rectangle(shape->X, shape->Y, shape->X + shape->W, shape->Y + shape->W, border, 2);
             break;
-        case SHAPE_RECTANGLE:
-            al_draw_filled_rectangle(s->x, s->y, s->x + s->w, s->y + s->h, s->color);
-            al_draw_rectangle(s->x, s->y, s->x + s->w, s->y + s->h, border, 2);
+        case ShapeRectangle:
+            al_draw_filled_rectangle(shape->X, shape->Y, shape->X + shape->W, shape->Y + shape->H, shape->Color);
+            al_draw_rectangle(shape->X, shape->Y, shape->X + shape->W, shape->Y + shape->H, border, 2);
             break;
-        case SHAPE_CIRCLE:
-            al_draw_filled_circle(s->x, s->y, s->r, s->color);
-            al_draw_circle(s->x, s->y, s->r + 2, border, 2);
+        case ShapeCircle:
+            al_draw_filled_circle(shape->X, shape->Y, shape->R, shape->Color);
+            al_draw_circle(shape->X, shape->Y, shape->R + 2, border, 2);
             break;
-        case SHAPE_TRIANGLE:
-            al_draw_filled_triangle(s->x, s->y, s->x + s->w, s->y, s->x + s->w / 2, s->y - s->h, s->color);
-            al_draw_triangle(s->x, s->y, s->x + s->w, s->y, s->x + s->w / 2, s->y - s->h, border, 2);
+        case ShapeTriangle:
+            al_draw_filled_triangle(shape->X, shape->Y, shape->X + shape->W, shape->Y, shape->X + shape->W / 2, shape->Y - shape->H, shape->Color);
+            al_draw_triangle(shape->X, shape->Y, shape->X + shape->W, shape->Y, shape->X + shape->W / 2, shape->Y - shape->H, border, 2);
             break;
     }
 }
 
-void draw_menu(ALLEGRO_FONT* font) {
+void DrawMenu(ALLEGRO_FONT* font) {
     const char* options[] = { "Quadrado", "Círculo", "Retângulo", "Triângulo" };
     for (int i = 0; i < 4; i++) {
-        ALLEGRO_COLOR color = (i == menu_selection) ? al_map_rgb(255, 255, 0) : al_map_rgb(255, 255, 255);
-        al_draw_textf(font, color, SCREEN_WIDTH / 2 - 100, 150 + i * 50, 0, "%s", options[i]);
+        ALLEGRO_COLOR color = (i == menuSelection) ? al_map_rgb(255, 255, 0) : al_map_rgb(255, 255, 255);
+        al_draw_textf(font, color, ScreenWidth / 2 - 100, 150 + i * 50, 0, "%s", options[i]);
     }
-    al_draw_text(font, al_map_rgb(255, 255, 255), SCREEN_WIDTH / 2 - 100, 100, 0, "Selecione com ↑ ↓ e ENTER");
+    al_draw_text(font, al_map_rgb(255, 255, 255), ScreenWidth / 2 - 100, 100, 0, "Selecione com ↑ ↓ e ENTER");
 }
 
-void add_shape(ShapeType type) {
-    if (shape_count >= MAX_SHAPES) return;
+void AddShape(ShapeType type) {
+    if (shapeCount >= MaxShapes) return;
     Shape s;
-    s.type = type;
-    s.x = rand() % (SCREEN_WIDTH - 100) + 50;
-    s.y = rand() % (SCREEN_HEIGHT - 100) + 50;
-    s.w = 50; s.h = 50; s.r = 30;
-    s.color = al_map_rgb(rand() % 256, rand() % 256, rand() % 256);
-    shapes[shape_count++] = s;
+    s.Type = type;
+    s.X = rand() % (ScreenWidth - 100) + 50;
+    s.Y = rand() % (ScreenHeight - 100) + 50;
+
+    switch (type) {
+        case ShapeSquare:
+            s.W = 50;
+            s.H = 50;
+            s.R = 0;
+            break;
+        case ShapeRectangle:
+            s.W = 100;
+            s.H = 50;
+            s.R = 0;
+            break;
+        case ShapeCircle:
+            s.R = 30;
+            s.W = s.H = 0;
+            break;
+        case ShapeTriangle:
+            s.W = 60;
+            s.H = 80;
+            s.R = 0;
+            break;
+    }
+
+    s.Color = al_map_rgb(rand() % 256, rand() % 256, rand() % 256);
+    shapes[shapeCount++] = s;
 }
 
-bool is_mouse_over(const Shape* s, float mx, float my) {
-    switch (s->type) {
-        case SHAPE_SQUARE:
-        case SHAPE_RECTANGLE:
-            return (mx >= s->x && mx <= s->x + s->w && my >= s->y && my <= s->y + (s->type == SHAPE_SQUARE ? s->w : s->h));
-        case SHAPE_CIRCLE:
-            return ((mx - s->x) * (mx - s->x) + (my - s->y) * (my - s->y)) <= (s->r * s->r);
-        case SHAPE_TRIANGLE:
-            return true; // simplificação
+bool IsMouseOver(const Shape* shape, float mx, float my) {
+    switch (shape->Type) {
+        case ShapeSquare:
+        case ShapeRectangle:
+            return (mx >= shape->X && mx <= shape->X + shape->W && my >= shape->Y && my <= shape->Y + (shape->Type == ShapeSquare ? shape->W : shape->H));
+        case ShapeCircle:
+            return ((mx - shape->X) * (mx - shape->X) + (my - shape->Y) * (my - shape->Y)) <= (shape->R * shape->R);
+        case ShapeTriangle:
+            return (mx >= shape->X && mx <= shape->X + shape->W && my <= shape->Y && my >= shape->Y - shape->H);
     }
     return false;
+}
+
+void SaveScreenshot() {
+    char filename[64];
+    snprintf(filename, sizeof(filename), "screenshot_%d.png", screenshotCount++);
+    ALLEGRO_BITMAP* screenshot = al_clone_bitmap(al_get_target_bitmap());
+    if (al_save_bitmap(filename, screenshot)) {
+        printf("Screenshot salva: %s\n", filename);
+    } else {
+        printf("Erro ao salvar screenshot!\n");
+    }
+    al_destroy_bitmap(screenshot);
 }
